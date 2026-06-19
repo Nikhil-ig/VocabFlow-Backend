@@ -1,0 +1,201 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// NextAuth Models
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id               String    @id @default(cuid())
+  name             String?
+  email            String?   @unique
+  emailVerified    DateTime?
+  image            String?
+  password         String?
+  role             String    @default("USER")
+  
+  // Multi-Tenancy
+  organizationId   String?
+  organization     Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  
+  // Individual Subscription
+  subscriptionTier String    @default("FREE")
+  subscriptionEnd  DateTime?
+
+  accounts         Account[]
+  sessions         Session[]
+
+  // Relations
+  vocabularyCards  VocabularyCard[]
+  historyEntries   WordHistory[]
+  statistics       UserStatistics?
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// Organization Model (Multi-Tenancy)
+model Organization {
+  id               String   @id @default(cuid())
+  name             String
+  
+  // White-labeling features
+  logoUrl          String?
+  primaryColor     String?
+  customDomain     String?
+  
+  // Subscription / Billing
+  subscriptionTier String   @default("FREE") // 'FREE', 'PRO', 'ENTERPRISE'
+  subscriptionEnd  DateTime?
+  stripeCustomerId String?
+  
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  
+  // Relations
+  users            User[]
+  cards            VocabularyCard[]
+}
+
+// Board Column Model (Dynamic Kanban)
+model BoardColumn {
+  id        String   @id @default(cuid())
+  name      String
+  color     String   // e.g. "bg-indigo-500" or hex "#4f46e5"
+  order     Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  cards     VocabularyCard[]
+}
+
+// Vocabulary Card Model
+model VocabularyCard {
+  id          String         @id @default(cuid())
+  word        String
+  meaning     String
+  example     String?
+  status      String         @default("TO_LEARN") // Legacy, to be removed
+  columnId    String?        // New dynamic column relation
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  userId      String
+
+  // New Fields (12-column support)
+  pos           String?  // Part of Speech
+  synonyms      String?
+  antonyms      String?
+  pronunciation String?
+  rootWords     String?
+  mood          String?
+  difficulty    String?
+  connotation   String?
+
+  // Relations
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  column         BoardColumn?  @relation(fields: [columnId], references: [id], onDelete: SetNull)
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  historyEntries WordHistory[]
+}
+
+// Word History Model
+model WordHistory {
+  id                 String        @id @default(cuid())
+  cardId             String
+  userId             String
+  action             String
+  previousStatus     String?
+  newStatus          String?
+  timestamp          DateTime      @default(now())
+  timesReviewed      Int           @default(0)
+  timesMarkedCorrect Int           @default(0)
+
+  vocabularyCard VocabularyCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// User Statistics Model (for aggregated data)
+model UserStatistics {
+  id                   String     @id @default(cuid())
+  userId               String     @unique // Each user has one stats entry
+  totalCards           Int        @default(0)
+  masteredCards        Int        @default(0)
+  learningCards        Int        @default(0)
+  toLearnCards         Int        @default(0)
+  masteryPercentage    Int        @default(0)
+  lastUpdated          DateTime   @updatedAt
+  totalReviewsToday    Int        @default(0)
+  averageReviewsPerDay Float      @default(0.0)
+  streakDays           Int        @default(0)
+
+  // Relations
+  user                 User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_statistics") // Map to a snake_case table name
+}
+
+// Global System Configuration (White-labeling)
+model SystemSettings {
+  id                 String   @id @default("global")
+  applicationName    String   @default("VocabFlow AI")
+  primaryColor       String   @default("indigo")
+  enablePublicReg    Boolean  @default(true)
+  spacedRepAlgorithm String   @default("SM-2")
+  uiStyle            String   @default("glassmorphism") // 'minimal', 'glassmorphism', 'playful'
+  cardStyle          String   @default("modern")        // 'classic', 'modern', '3d'
+  fontFamily         String   @default("inter")         // 'inter', 'outfit', 'roboto', 'comic'
+  updatedAt          DateTime @updatedAt
+}
+
+// Daily Word of the Day (Global)
+model WordOfTheDay {
+  id            String   @id @default(cuid())
+  date          DateTime @unique // We will normalize this to midnight UTC
+  word          String   @unique
+  meaning       String
+  example       String?
+  pos           String?
+  pronunciation String?
+  createdAt     DateTime @default(now())
+}

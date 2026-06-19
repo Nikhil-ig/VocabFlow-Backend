@@ -1,0 +1,13 @@
+node_modules
+# Keep environment variables out of version control
+.env
+
+/generated/prisma
+
+# Temporary Test Scripts & Data
+test.js
+src/test_stats.ts
+src/test_cards.ts
+*.csv
+backend.log
+frontend.log
