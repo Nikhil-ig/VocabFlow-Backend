@@ -214,11 +214,17 @@ export const getWordOfTheDay = async (req: any, res: Response): Promise<void> =>
       return;
     }
 
-    const pastWordsQuery = await prisma.wordOfTheDay.findMany({
-      select: { word: true }
-    });
-    const pastWords = pastWordsQuery.map(w => w.word);
-    const excludeList = pastWords.length > 0 ? `Do NOT use any of these words: ${pastWords.join(', ')}.` : '';
+    const pastWordsQuery = await prisma.wordOfTheDay.findMany({ select: { word: true } });
+    const existingCardsQuery = await prisma.vocabularyCard.findMany({ select: { word: true } });
+    
+    const allUsedWords = new Set([
+      ...pastWordsQuery.map(w => w.word.toLowerCase()),
+      ...existingCardsQuery.map(w => w.word.toLowerCase())
+    ]);
+    
+    const excludeList = allUsedWords.size > 0 
+      ? `CRITICAL INSTRUCTION: Do NOT use any of these words: ${Array.from(allUsedWords).join(', ')}.` 
+      : '';
 
     const prompt = `You are an expert linguist and vocabulary app AI.
 Provide an interesting, advanced, and beautiful vocabulary word for the "Word of the Day".
