@@ -40,29 +40,44 @@ model Session {
 }
 
 model User {
-  id               String    @id @default(cuid())
-  name             String?
-  email            String?   @unique
-  emailVerified    DateTime?
-  image            String?
-  password         String?
-  role             String    @default("USER")
-  
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  role          String    @default("USER")
+
+  // Gamification & VocabVerse Core
+  xp                 Int      @default(0)
+  level              Int      @default(1)
+  displayName        String?
+  avatar             String?  @default("explorer") // "explorer", "scholar", "wizard", "alchemist", "astronomer"
+  onboardingComplete Boolean  @default(false)
+
   // Multi-Tenancy
-  organizationId   String?
-  organization     Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
   // Individual Subscription
   subscriptionTier String    @default("FREE")
   subscriptionEnd  DateTime?
 
-  accounts         Account[]
-  sessions         Session[]
+  accounts Account[]
+  sessions Session[]
 
   // Relations
   vocabularyCards  VocabularyCard[]
   historyEntries   WordHistory[]
   statistics       UserStatistics?
+  profile          UserProfile?
+  streak           UserStreak?
+  xpTransactions   XPTransaction[]
+  questProgress    QuestProgress[]
+  wordMasteries    WordMastery[]
+  wordDexEntries   WordDexEntry[]
+  gardenPlots      GardenPlot[]
+  userAchievements UserAchievement[]
 }
 
 model VerificationToken {
@@ -73,83 +88,254 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-// Organization Model (Multi-Tenancy)
-model Organization {
+// User Profile & Preferences
+model UserProfile {
   id               String   @id @default(cuid())
-  name             String
-  
-  // White-labeling features
-  logoUrl          String?
-  primaryColor     String?
-  customDomain     String?
-  
-  // Subscription / Billing
-  subscriptionTier String   @default("FREE") // 'FREE', 'PRO', 'ENTERPRISE'
-  subscriptionEnd  DateTime?
-  stripeCustomerId String?
-  
+  userId           String   @unique
+  nativeLanguage   String   @default("en")
+  englishLevel     String   @default("INTERMEDIATE") // BEGINNER, INTERMEDIATE, ADVANCED, FLUENT
+  dailyGoalMinutes Int      @default(15)
+  targetWordsPerDay Int     @default(5)
+  preferredWorld   String?  @default("everyday-realm")
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
-  
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// User Streak Tracker
+model UserStreak {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  currentStreak  Int      @default(0)
+  longestStreak  Int      @default(0)
+  lastActiveDate String?  // YYYY-MM-DD
+  freezeCount    Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Immutable XP Ledger
+model XPTransaction {
+  id          String   @id @default(cuid())
+  userId      String
+  amount      Int
+  source      String   // "QUIZ_CORRECT", "DAILY_QUEST", "WORD_DISCOVERED", "WORD_MASTERED", "STREAK_BONUS", "GARDEN_HARVEST"
+  description String
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Daily Quests (System Defined or Auto-Generated)
+model DailyQuest {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  type        String   // "LEARN_WORDS", "REVIEW_WORDS", "QUIZ_SCORE", "STREAK_MAINTAIN"
+  targetCount Int
+  xpReward    Int
+  icon        String   @default("sparkles") // "sword", "book", "sparkles", "flame", "trophy"
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  progressEntries QuestProgress[]
+}
+
+// Per-User Daily Quest Progress
+model QuestProgress {
+  id           String   @id @default(cuid())
+  userId       String
+  questId      String
+  date         String   // YYYY-MM-DD
+  currentCount Int      @default(0)
+  completed    Boolean  @default(false)
+  claimed      Boolean  @default(false)
+  updatedAt    DateTime @updatedAt
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quest DailyQuest @relation(fields: [questId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, questId, date])
+}
+
+// 6-Stage Word Mastery Tracker
+model WordMastery {
+  id             String    @id @default(cuid())
+  userId         String
+  cardId         String
+  stage          String    @default("NEW") // "NEW", "SEEN", "FAMILIAR", "PRACTICED", "LEARNED", "MASTERED"
+  stageLevel     Int       @default(0)     // 0 = New, 1 = Seen, 2 = Familiar, 3 = Practiced, 4 = Learned, 5 = Mastered
+  timesReviewed  Int       @default(0)
+  timesCorrect   Int       @default(0)
+  lastReviewedAt DateTime?
+  nextReviewDue  DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  card VocabularyCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, cardId])
+}
+
+// WordDex Collection (Collectible Card Vault)
+model WordDexEntry {
+  id           String   @id @default(cuid())
+  userId       String
+  cardId       String
+  rarity       String   @default("COMMON") // "COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY"
+  discoveredAt DateTime @default(now())
+  favorite     Boolean  @default(false)
+
+  user User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  card VocabularyCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, cardId])
+}
+
+// Vocabulary Garden Plot
+model GardenPlot {
+  id          String   @id @default(cuid())
+  userId      String
+  cardId      String
+  slotIndex   Int      // 0 to 24 (5x5 grid)
+  plantType   String   @default("FLOWER") // "FLOWER", "BONSAI", "CRYSTAL_TREE", "FERN", "ORCHID", "GOLDEN_OAK"
+  growthStage Int      @default(1)        // 1=Seedling, 2=Growing, 3=Blooming, 4=Radiant Ancient Tree
+  health      Int      @default(100)      // 0 to 100
+  wateredAt   DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  card VocabularyCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, slotIndex])
+}
+
+// Themed Vocabulary Worlds
+model VocabWorld {
+  id          String   @id @default(cuid())
+  slug        String   @unique // "business-citadel", "academic-nexus", "everyday-realm", "literary-wilds", "tech-frontier"
+  name        String
+  description String
+  icon        String   @default("globe")
+  themeColor  String   @default("#4f46e5")
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+}
+
+// Achievements
+model Achievement {
+  id          String   @id @default(cuid())
+  code        String   @unique // "FIRST_WORD", "WORD_COLLECTOR_10", "GARDEN_BLOOM_1", "QUIZ_MASTER_5", "STREAK_7"
+  title       String
+  description String
+  category    String   // "WORDS", "STREAK", "GARDEN", "QUIZ", "XP"
+  icon        String   @default("trophy")
+  xpReward    Int      @default(50)
+  createdAt   DateTime @default(now())
+
+  userAchievements UserAchievement[]
+}
+
+// User Achievement Unlocks
+model UserAchievement {
+  id            String   @id @default(cuid())
+  userId        String
+  achievementId String
+  unlockedAt    DateTime @default(now())
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievementId])
+}
+
+// Organization Model (Multi-Tenancy)
+model Organization {
+  id   String @id @default(cuid())
+  name String
+
+  // White-labeling features
+  logoUrl      String?
+  primaryColor String?
+  customDomain String?
+
+  // Subscription / Billing
+  subscriptionTier String    @default("FREE") // 'FREE', 'PRO', 'ENTERPRISE'
+  subscriptionEnd  DateTime?
+  stripeCustomerId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   // Relations
-  users            User[]
-  cards            VocabularyCard[]
+  users User[]
+  cards VocabularyCard[]
 }
 
 // Board Column Model (Dynamic Kanban)
 model BoardColumn {
   id        String   @id @default(cuid())
   name      String
-  color     String   // e.g. "bg-indigo-500" or hex "#4f46e5"
+  color     String // e.g. "bg-indigo-500" or hex "#4f46e5"
   order     Int
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  cards     VocabularyCard[]
+  cards VocabularyCard[]
 }
 
 // Vocabulary Card Model
 model VocabularyCard {
-  id          String         @id @default(cuid())
-  word        String
-  meaning     String
-  example     String?
-  status      String         @default("TO_LEARN") // Legacy, to be removed
-  columnId    String?        // New dynamic column relation
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  userId      String
+  id        String   @id @default(cuid())
+  word      String
+  meaning   String
+  example   String?
+  status    String   @default("TO_LEARN") // Legacy status
+  columnId  String?  // Dynamic column relation
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  userId    String
 
-  // New Fields (12-column support)
-  pos           String?  // Part of Speech
+  // Metadata Fields
+  pos           String? // Part of Speech
   synonyms      String?
   antonyms      String?
   pronunciation String?
   rootWords     String?
   mood          String?
-  difficulty    String?
+  difficulty    String? // "BEGINNER", "INTERMEDIATE", "ADVANCED"
   connotation   String?
+  worldSlug     String? @default("everyday-realm") // World binding
+  rarity        String? @default("COMMON")         // "COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY"
 
   // Relations
-  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  column         BoardColumn?  @relation(fields: [columnId], references: [id], onDelete: SetNull)
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  column         BoardColumn?   @relation(fields: [columnId], references: [id], onDelete: SetNull)
   organizationId String?
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  organization   Organization?  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   historyEntries WordHistory[]
+  masteries      WordMastery[]
+  wordDexEntries WordDexEntry[]
+  gardenPlots    GardenPlot[]
 }
 
 // Word History Model
 model WordHistory {
-  id                 String        @id @default(cuid())
+  id                 String   @id @default(cuid())
   cardId             String
   userId             String
   action             String
   previousStatus     String?
   newStatus          String?
-  timestamp          DateTime      @default(now())
-  timesReviewed      Int           @default(0)
-  timesMarkedCorrect Int           @default(0)
+  timestamp          DateTime @default(now())
+  timesReviewed      Int      @default(0)
+  timesMarkedCorrect Int      @default(0)
 
   vocabularyCard VocabularyCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
   user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -157,41 +343,41 @@ model WordHistory {
 
 // User Statistics Model (for aggregated data)
 model UserStatistics {
-  id                   String     @id @default(cuid())
-  userId               String     @unique // Each user has one stats entry
-  totalCards           Int        @default(0)
-  masteredCards        Int        @default(0)
-  learningCards        Int        @default(0)
-  toLearnCards         Int        @default(0)
-  masteryPercentage    Int        @default(0)
-  lastUpdated          DateTime   @updatedAt
-  totalReviewsToday    Int        @default(0)
-  averageReviewsPerDay Float      @default(0.0)
-  streakDays           Int        @default(0)
+  id                   String   @id @default(cuid())
+  userId               String   @unique // Each user has one stats entry
+  totalCards           Int      @default(0)
+  masteredCards        Int      @default(0)
+  learningCards        Int      @default(0)
+  toLearnCards         Int      @default(0)
+  masteryPercentage    Int      @default(0)
+  lastUpdated          DateTime @updatedAt
+  totalReviewsToday    Int      @default(0)
+  averageReviewsPerDay Float    @default(0.0)
+  streakDays           Int      @default(0)
 
   // Relations
-  user                 User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("user_statistics") // Map to a snake_case table name
+  @@map("user_statistics")
 }
 
 // Global System Configuration (White-labeling)
 model SystemSettings {
   id                 String   @id @default("global")
-  applicationName    String   @default("VocabFlow AI")
+  applicationName    String   @default("VocabVerse")
   primaryColor       String   @default("indigo")
   enablePublicReg    Boolean  @default(true)
   spacedRepAlgorithm String   @default("SM-2")
-  uiStyle            String   @default("glassmorphism") // 'minimal', 'glassmorphism', 'playful'
-  cardStyle          String   @default("modern")        // 'classic', 'modern', '3d'
-  fontFamily         String   @default("inter")         // 'inter', 'outfit', 'roboto', 'comic'
+  uiStyle            String   @default("cosmic") // 'minimal', 'glassmorphism', 'playful', 'cosmic'
+  cardStyle          String   @default("modern") // 'classic', 'modern', '3d'
+  fontFamily         String   @default("outfit") // 'inter', 'outfit', 'roboto'
   updatedAt          DateTime @updatedAt
 }
 
 // Daily Word of the Day (Global)
 model WordOfTheDay {
   id            String   @id @default(cuid())
-  date          DateTime @unique // We will normalize this to midnight UTC
+  date          DateTime @unique // Normalized to midnight UTC
   word          String   @unique
   meaning       String
   example       String?

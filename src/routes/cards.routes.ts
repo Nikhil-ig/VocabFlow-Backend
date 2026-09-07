@@ -1,8 +1,18 @@
 import { Router } from 'express';
-import { getCards, createCard, getCard, updateCard, deleteCard, getPracticeCards } from '../controllers/cards.controller';
+import {
+  getCards,
+  createCard,
+  getCard,
+  updateCard,
+  deleteCard,
+  getPracticeCards,
+  revealWordOfTheDay,
+} from '../controllers/cards.controller';
 import { authenticateToken } from '../middleware/auth';
 
 const router = Router();
+
+router.post('/word-of-the-day/reveal', authenticateToken, revealWordOfTheDay);
 
 // Guest allowed for GET
 router.get('/', (req, res, next) => {

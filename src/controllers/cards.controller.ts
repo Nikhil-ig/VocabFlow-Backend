@@ -1,6 +1,14 @@
 import { Response } from 'express';
+import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../server';
 import { z } from 'zod';
+import {
+  awardXP,
+  updateDailyStreak,
+  recordQuestProgress,
+  getUserGamificationSnapshot,
+  getTodayDateString,
+} from '../services/gamification.service';
 
 const cardSchema = z.object({
   word: z.string().min(1, 'Word is required'),
@@ -16,6 +24,8 @@ const cardSchema = z.object({
   mood: z.string().optional().nullable(),
   difficulty: z.string().optional().nullable(),
   connotation: z.string().optional().nullable(),
+  rarity: z.string().optional(),
+  worldSlug: z.string().optional(),
 });
 
 const cardUpdateSchema = z.object({
@@ -102,7 +112,12 @@ export const getCards = async (req: any, res: Response): Promise<void> => {
     if (status && ['TO_LEARN', 'LEARNING', 'MASTERED'].includes(status)) {
       baseWhere.status = status;
     }
-    if (pos) baseWhere.pos = pos;
+    if (pos && pos !== 'ALL') {
+      const pLower = pos.toLowerCase();
+      const pUpper = pos.toUpperCase();
+      const pCapital = pos.charAt(0).toUpperCase() + pos.slice(1).toLowerCase();
+      baseWhere.pos = { in: [pLower, pUpper, pCapital] };
+    }
     if (mood) baseWhere.mood = mood;
     if (connotation) baseWhere.connotation = connotation;
     if (difficulty) baseWhere.difficulty = difficulty;
@@ -226,6 +241,8 @@ export const createCard = async (req: any, res: Response): Promise<void> => {
         mood: parsed.data.mood,
         difficulty: parsed.data.difficulty,
         connotation: parsed.data.connotation,
+        rarity: parsed.data.rarity || 'COMMON',
+        worldSlug: parsed.data.worldSlug || 'everyday-realm',
       },
     });
 
@@ -238,8 +255,180 @@ export const createCard = async (req: any, res: Response): Promise<void> => {
       }
     });
 
-    res.status(201).json({ success: true, data: newCard });
+    // 1. Collect in WordDex
+    await prisma.wordDexEntry.upsert({
+      where: {
+        userId_cardId: {
+          userId: user.id,
+          cardId: newCard.id,
+        },
+      },
+      update: {},
+      create: {
+        userId: user.id,
+        cardId: newCard.id,
+        rarity: newCard.rarity || 'COMMON',
+      },
+    });
+
+    // 2. Initialize Word Mastery at Stage 1 (SEEN)
+    await prisma.wordMastery.upsert({
+      where: {
+        userId_cardId: {
+          userId: user.id,
+          cardId: newCard.id,
+        },
+      },
+      update: {},
+      create: {
+        userId: user.id,
+        cardId: newCard.id,
+        stage: 'SEEN',
+        stageLevel: 1,
+        timesReviewed: 1,
+        lastReviewedAt: new Date(),
+      },
+    });
+
+    // 3. Award +20 Discovery XP
+    const xpResult = await awardXP(
+      user.id,
+      20,
+      'WORD_DISCOVERED',
+      `Discovered "${newCard.word}" (${newCard.rarity || 'COMMON'})`
+    );
+
+    // 4. Update Daily Streak & Quest Progress
+    await updateDailyStreak(user.id);
+    await recordQuestProgress(user.id, 'LEARN_WORDS', 1);
+
+    res.status(201).json({
+      success: true,
+      data: newCard,
+      gamification: xpResult,
+    });
   } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+export const revealWordOfTheDay = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ success: false, error: 'Unauthorized' });
+      return;
+    }
+
+    // Get today's or latest WordOfTheDay
+    let wotd = await prisma.wordOfTheDay.findFirst({
+      orderBy: { date: 'desc' },
+    });
+
+    if (!wotd) {
+      wotd = await prisma.wordOfTheDay.create({
+        data: {
+          date: new Date(),
+          word: 'Serendipity',
+          meaning: 'The occurrence and development of events by chance in a happy or beneficial way.',
+          example: 'Finding that rare book was pure serendipity.',
+          pos: 'Noun',
+          pronunciation: 'ser-uhn-dip-i-tee',
+        },
+      });
+    }
+
+    // Find or create matching vocabulary card
+    let card = await prisma.vocabularyCard.findFirst({
+      where: { word: wotd.word },
+    });
+
+    if (!card) {
+      card = await prisma.vocabularyCard.create({
+        data: {
+          word: wotd.word,
+          meaning: wotd.meaning,
+          example: wotd.example,
+          pos: wotd.pos,
+          pronunciation: wotd.pronunciation,
+          rarity: 'RARE',
+          worldSlug: 'everyday-realm',
+          userId,
+        },
+      });
+    }
+
+    // Collect in WordDex
+    await prisma.wordDexEntry.upsert({
+      where: {
+        userId_cardId: {
+          userId,
+          cardId: card.id,
+        },
+      },
+      update: {},
+      create: {
+        userId,
+        cardId: card.id,
+        rarity: 'RARE',
+      },
+    });
+
+    // Initialize WordMastery at Stage 1
+    await prisma.wordMastery.upsert({
+      where: {
+        userId_cardId: {
+          userId,
+          cardId: card.id,
+        },
+      },
+      update: {},
+      create: {
+        userId,
+        cardId: card.id,
+        stage: 'SEEN',
+        stageLevel: 1,
+        timesReviewed: 1,
+        lastReviewedAt: new Date(),
+      },
+    });
+
+    // Award +25 XP if not already awarded for today
+    const todayStr = getTodayDateString();
+    const existingXP = await prisma.xPTransaction.findFirst({
+      where: {
+        userId,
+        source: 'WORD_OF_THE_DAY',
+        createdAt: {
+          gte: new Date(new Date().setUTCHours(0, 0, 0, 0)),
+        },
+      },
+    });
+
+    let gamificationSnapshot;
+    if (!existingXP) {
+      gamificationSnapshot = await awardXP(
+        userId,
+        25,
+        'WORD_OF_THE_DAY',
+        `Revealed Daily Scratch Card: "${card.word}"`
+      );
+      await updateDailyStreak(userId);
+      await recordQuestProgress(userId, 'LEARN_WORDS', 1);
+    } else {
+      gamificationSnapshot = await getUserGamificationSnapshot(userId);
+    }
+
+    res.json({
+      success: true,
+      data: {
+        ...wotd,
+        cardId: card.id,
+      },
+      gamification: gamificationSnapshot,
+    });
+  } catch (error: any) {
+    console.error('revealWordOfTheDay error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 };

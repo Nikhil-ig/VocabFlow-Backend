@@ -52,15 +52,17 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       organizationId: user.organizationId,
     });
 
+    const isProd = process.env.NODE_ENV === 'production';
     res.cookie('token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'none',
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
     });
 
     res.status(201).json({
       success: true,
+      token,
       user: {
         id: user.id,
         name: user.name,
@@ -106,15 +108,17 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       subscriptionTier: user.subscriptionTier,
     });
 
+    const isProd = process.env.NODE_ENV === 'production';
     res.cookie('token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'none',
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
     });
 
     res.status(200).json({
       success: true,
+      token,
       user: {
         id: user.id,
         name: user.name,
@@ -156,10 +160,11 @@ export const me = async (req: any, res: Response): Promise<void> => {
 };
 
 export const logout = async (req: Request, res: Response): Promise<void> => {
+  const isProd = process.env.NODE_ENV === 'production';
   res.clearCookie('token', {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'none',
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax',
   });
   res.status(200).json({ success: true, message: 'Logged out successfully' });
 };

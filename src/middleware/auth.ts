@@ -39,6 +39,26 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
   });
 };
 
+export const optionalAuth = (req: AuthRequest, res: Response, next: NextFunction): void => {
+  let token = req.cookies?.token;
+  if (!token) {
+    const authHeader = req.headers['authorization'];
+    token = authHeader && authHeader.split(' ')[1];
+  }
+
+  if (token) {
+    jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
+      if (!err && user) {
+        req.user = user as any;
+      }
+      next();
+    });
+  } else {
+    next();
+  }
+};
+
 export const generateToken = (payload: any): string => {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
 };
+

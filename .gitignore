@@ -11,3 +11,8 @@ src/test_cards.ts
 *.csv
 backend.log
 frontend.log
+
+# Build output
+dist/
+*.tsbuildinfo
+
