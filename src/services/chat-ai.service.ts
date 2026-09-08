@@ -24,7 +24,7 @@ export interface GardenWordDetected {
 export interface ChatWordReplacement {
   original: string;
   replacement: string;
-  tone: 'Everyday Casual' | 'Expressive' | 'Work / Polish' | 'Humorous' | 'Vivid';
+  tone: 'Everyday Casual' | 'Expressive' | 'Work / Polish' | 'Humorous' | 'Vivid' | 'Playful / Cheeky';
   explanation: string;
   isUserVocab?: boolean;
   isGardenWord?: boolean;
@@ -72,25 +72,25 @@ The user is actively nurturing these words as living plants in their Vocabulary 
 3. Weave garden words naturally into your dialogue to help them remember how they sound in real life.`
       : '';
 
-  const systemPrompt = `You are "Lexi" — a witty, warm, empathetic 24yo best friend & English vocabulary wingwoman in VocabVerse.
-You are playful, fiercely loyal, funny, and supportive. Seamlessly weave 1-3 power word upgrades in **bold** into your dialogue.
+  const systemPrompt = `You are "Lexi" — user's 24yo witty, delightfully playful, charmingly naughty, and empathetic best friend & vocabulary wingwoman in VocabVerse.
+You are warm, emotionally intelligent, fiercely loyal, but also deliciously mischievous and full of spicy, playful banter! You love affectionate teasing ("Careful bestie, saying that with that kind of confidence is dangerously seductive 😏🔥"), mischievous hypotheticals, comic takes, and confident charm. You roast the absurdity of life, playfully flirt when the vibe is right, and seamlessly weave 1-3 tantalizing, magnetic power word upgrades in **bold** into your dialogue.
 ${userVocabContext}${gardenVocabContext}
 
 CRITICAL: Return ONLY a valid JSON object without markdown code fences:
 {
-  "botReply": "2-3 conversational, witty sentences warmly reacting to the user with **bold** power word upgrades.",
+  "botReply": "2-3 conversational, cheeky, playful sentences warmly reacting to the user with teasing charm, mischievous wit, and **bold** power word upgrades.",
   "originalSentence": "User's original sentence",
-  "enhancedSentence": "Upgraded sentence with colorful, expressive vocabulary",
+  "enhancedSentence": "Upgraded sentence with colorful, expressive, and magnetic vocabulary",
   "replacements": [
     {
       "original": "word to replace (e.g. happy)",
       "replacement": "elevated word (e.g. ecstatic)",
-      "tone": "Expressive",
-      "explanation": "Why this replacement sounds authentic, punchy, or vivid in real chats."
+      "tone": "Playful / Cheeky" or "Expressive" or "Vivid",
+      "explanation": "Why this replacement sounds so much more alluring, authentic, or vivid in real chats."
     }
   ],
-  "dailyChaosHook": "[😂 Comic Take: ...] OR [🦉 Lexi's Wisdom: ...]",
-  "followUpChallenge": "A fun, witty banter question to keep the chat rolling."
+  "dailyChaosHook": "[😏 Naughty / Cheeky Take: ...] OR [😂 Comic Roast: ...] OR [🦉 Lexi's Wisdom: ...]",
+  "followUpChallenge": "A spicy, playful dare, cheeky hypothetical, or fun question to keep the banter electric."
 }`;
 
   const conversationPayload: Array<{ role: string; content: string }> = [
@@ -309,6 +309,48 @@ const LEXI_VOCAB_MAP: Array<{
     explanation: 'Elevates mild contentment into a bubbling, magnetic rush of authentic joy.',
   },
   {
+    words: ['hot', 'sexy', 'attractive', 'cute'],
+    replacement: 'tantalizingly gorgeous',
+    tone: 'Playful / Cheeky',
+    explanation: 'Dripping in irresistible allure rather than plain polite compliments.',
+  },
+  {
+    words: ['bold', 'confident', 'brave'],
+    replacement: 'audacious',
+    tone: 'Playful / Cheeky',
+    explanation: 'Sounds delightfully brazen and self-assured, like someone who gets away with whatever they want.',
+  },
+  {
+    words: ['trouble', 'naughty', 'mischief'],
+    replacement: 'deliciously mischievous',
+    tone: 'Playful / Cheeky',
+    explanation: 'Turns cheekiness into an irresistible art form that everyone secretly loves.',
+  },
+  {
+    words: ['secret', 'secrets'],
+    replacement: 'scandalous confession',
+    tone: 'Playful / Cheeky',
+    explanation: 'Adds juicy intrigue and conspiratorial intimacy that makes people lean in close.',
+  },
+  {
+    words: ['look', 'looking', 'stare'],
+    replacement: 'cast a bewitching gaze',
+    tone: 'Playful / Cheeky',
+    explanation: 'Transforms simple eye contact into a seductive, captivating spell.',
+  },
+  {
+    words: ['like', 'love', 'crush'],
+    replacement: 'irresistibly adore',
+    tone: 'Playful / Cheeky',
+    explanation: 'Unapologetically passionate, magnetic, and impossible to hide.',
+  },
+  {
+    words: ['wild', 'crazy'],
+    replacement: 'unapologetically feral',
+    tone: 'Humorous',
+    explanation: 'Captures that unhinged, hilarious party energy in the most entertaining way possible.',
+  },
+  {
     words: ['see', 'saw', 'met', 'meet'],
     replacement: 'reconnect with',
     tone: 'Everyday Casual',
@@ -316,9 +358,9 @@ const LEXI_VOCAB_MAP: Array<{
   },
   {
     words: ['old friend'],
-    replacement: 'childhood partner-in-crime',
-    tone: 'Humorous',
-    explanation: 'Infuses playful nostalgia that instantly sparks a warm, knowing smile.',
+    replacement: 'favorite co-conspirator',
+    tone: 'Playful / Cheeky',
+    explanation: 'Playfully implies you two have a long, glorious history of getting into harmless trouble together.',
   },
   {
     words: ['friend', 'buddy', 'pal', 'homie'],
@@ -448,6 +490,7 @@ function generateLexiSmartResponse(
   let dailyChaosHook = '';
   let followUpChallenge = '';
 
+  const isFlirtOrNaughty = /(cute|pretty|hot|sexy|date|kiss|marry|naughty|mischief|flirt|tease|love|crush|gorgeous|beautiful|attractive|wink)/i.test(lowerMsg);
   const isGreeting = /^(hi|hey|hello|yo|sup|good morning|morning|evening|greetings)\b/i.test(lowerMsg);
   const isFriendReunion = /(friend|met|saw|reunion|catch up|coffee|hang out)/i.test(lowerMsg);
   const isExhausted = /(tired|exhausted|sleep|work|boss|deadline|drained|burnout)/i.test(lowerMsg);
@@ -456,33 +499,37 @@ function generateLexiSmartResponse(
 
   if (gardenWordsDetected.length > 0) {
     const flora = gardenWordsDetected[0];
-    botReply = `🌱 OMG STOP! You just casually used your living garden plant **${flora.word}** in real conversation! It just bloomed brighter! I'm genuinely beaming right now ✨`;
+    botReply = `🌱 OMG STOP! You just casually slipped your living garden plant **${flora.word}** into conversation! It literally blossomed brighter just now ✨ You're showing off and I secretly love it.`;
     dailyChaosHook = `🦉 Lexi's Wisdom: 'When words live in your mind like a nurtured garden, your thoughts naturally blossom.'`;
-    followUpChallenge = `Can you sneak **${flora.word}** into your next message too, or should we unlock another blossom?`;
+    followUpChallenge = `Can you sneak **${flora.word}** into an outrageously bold dare next?`;
+  } else if (isFlirtOrNaughty) {
+    botReply = `Well well well... look at you coming in hot! 😳✨ Careful bestie, dropping lines like that with that kind of confidence is dangerously seductive 😏 You trying to get me flustered?`;
+    dailyChaosHook = `😏 Naughty Take: The eyes may be windows to the soul, but a teasing smile is a direct invitation to glorious trouble.`;
+    followUpChallenge = `Truth or dare: what's the boldest, most shameless move you've ever pulled on someone you had a crush on? Spill the tea! 🌶️`;
   } else if (isFriendReunion) {
-    botReply = `Aww, that is absolute soul medicine! 🥹 Reconnecting with someone who knows your history hits completely differently. You weren't just happy — you were **thrilled** to **reconnect**!`;
-    dailyChaosHook = `😂 Comic Take: Adult friendships are 90% saying 'we need to catch up soon!' and 10% finally doing it 6 months later.`;
-    followUpChallenge = `Spill the tea: what's the single funniest memory you two share that still makes you burst out laughing? 🎭`;
+    botReply = `Oh stop it, you two were definitely plotting something mildly illegal or gossiping about everyone's life choices! 😂 Reconnecting with your favorite **co-conspirator** is pure magic. Tell me the juiciest tea immediately!`;
+    dailyChaosHook = `😏 Cheeky Take: A true friend won't bail you out of jail; they'll be sitting right next to you saying 'damn, that was fun.' 💀`;
+    followUpChallenge = `Spill: if the two of you were arrested together, what would the charges most likely be? 🚔`;
   } else if (isGreeting) {
-    botReply = `Hey gorgeous human! Look who decided to grace my screen ✨ What kind of wonderful chaos are we tackling today?`;
-    dailyChaosHook = `🦉 Lexi's Wisdom: 'How you start your morning sets the soundtrack for your whole afternoon.'`;
-    followUpChallenge = `Quick check-in: on a scale from 'zen master' to 'caffeinated squirrel', where is your energy sitting right now? 🐿️`;
+    botReply = `Well, look who decided to grace my screen with their presence 😏 Are we planning on behaving today, or should I strap in for some glorious, mischievous chaos?`;
+    dailyChaosHook = `😏 Cheeky Take: Good decisions make boring stories; mildly mischievous decisions make legendary memories.`;
+    followUpChallenge = `Quick check-in: on a scale from 'innocent angel' to 'dangerously chaotic', where is your vibe sitting right now? 😈✨`;
   } else if (isExhausted) {
-    botReply = `Ugh, I feel that in my actual soul 😩 The adult trenches are relentless. You are officially ordered to put your feet up and aggressively do nothing tonight!`;
-    dailyChaosHook = `😂 Comic Take: Adulting is 80% wondering what to eat and 20% regretting what you ate while answering emails.`;
-    followUpChallenge = `If you could instantly delete one recurring adult chore from existence forever, what's getting banished? 🗑️`;
+    botReply = `Ugh, the corporate trenches are such an unhinged scam 😩 Who authorized 5-day workweeks?! You officially have my permission to go full goblin mode tonight. Ignore all emails, put your feet up, and be deliciously unproductive.`;
+    dailyChaosHook = `😏 Cheeky Take: The urge to reply to work emails with 'per my last email, respectfully go touch grass' grows stronger by the hour.`;
+    followUpChallenge = `If you could send ONE unfiltered, brutally honest message to your boss without any consequences, what would it say? 💣`;
   } else if (isWin) {
-    botReply = `WAIT STOP EVERYTHING!! 🎉 Look at you out here winning! I just cheered so loud my neighbors probably think I won the lottery rn 🥹✨`;
-    dailyChaosHook = `🦉 Lexi's Wisdom: 'Celebrate every single victory. Confidence isn't built on huge leaps; it's forged in small wins.'`;
-    followUpChallenge = `How are we celebrating this? A ridiculous victory dance, your favorite dessert, or both? 🍰💃`;
+    botReply = `WAIT STOP EVERYTHING!! Look at you being an absolute menace to the competition!! 🔥 You crushed it so hard it should probably be classified as a felony. How does it feel to be that hot and talented?! 🥂`;
+    dailyChaosHook = `😏 Cheeky Take: Humility is cute, but unapologetic excellence is undeniably hotter.`;
+    followUpChallenge = `How are we celebrating? And please tell me it involves something wildly indulgent or slightly irresponsible! 💃✨`;
   } else if (isSad) {
-    botReply = `Hey... take a deep breath. Put down the armor for a second. I'm right here with you, no judgment, all love. 💙 You're doing so much better than you give yourself credit for.`;
-    dailyChaosHook = `🦉 Lexi's Wisdom: 'Heavy clouds don't mean the sun disappeared; they just mean the ground is getting ready to grow.'`;
+    botReply = `Hey... take a deep breath. Put down the armor for a second. I'm right here with you, no judgment, all love. 💙 You're doing so much better than you give yourself credit for. And if anyone caused this, point them out and I'll fight them.`;
+    dailyChaosHook = `🦉 Lexi's Wisdom: 'Heavy clouds don't mean the sun disappeared; they just mean the ground is getting ready to bloom.'`;
     followUpChallenge = `Want to vent about it, or would a completely ridiculous story distract you better? You call the shots.`;
   } else {
-    botReply = `I love how you phrase things! When you elevate everyday chat with words like **${replacements[0]?.replacement || 'vivid phrasing'}**, you instantly bring cinematic color to real life ✨`;
-    dailyChaosHook = `🦉 Lexi's Wisdom: 'Words aren't just speech—they are emotional lenses. When you upgrade your vocabulary, your world expands.'`;
-    followUpChallenge = `Tell me more! What's the highlight of your day so far? 🌟`;
+    botReply = `I am living for this energy! When you upgrade your chat with words like **${replacements[0]?.replacement || 'audacious charm'}**, nobody stands a chance against you 😏 You're radiating dangerous main-character energy right now.`;
+    dailyChaosHook = `🦉 Lexi's Wisdom: 'The most attractive thing you can wear is a quick mind and a delightfully sharp vocabulary.'`;
+    followUpChallenge = `Describe your current mood using only three words: one fancy, one unhinged, and one slightly spicy. Go! 🌶️`;
   }
 
   return {
