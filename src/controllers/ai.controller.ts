@@ -7,7 +7,7 @@ const openrouterKey = (process.env.OPENROUTER_API_KEY || '').replace(/^["']|["']
 // 100% Free OpenRouter AI Integration
 const openrouter = new OpenAI({
   baseURL: 'https://openrouter.ai/api/v1',
-  apiKey: openrouterKey,
+  apiKey: openrouterKey || 'openrouter-dummy-key',
   defaultHeaders: {
     'HTTP-Referer': 'https://vocabverse.app',
     'X-Title': 'VocabVerse AI',
