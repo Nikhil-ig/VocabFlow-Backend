@@ -81,12 +81,11 @@ export const callOpenRouterWithReasoning = async (
 
   // Strictly free OpenRouter models only (zero billing / zero token cost)
   const models = [
+    'inclusionai/ling-3.0-flash-fin:free',
     preferredModel,
-    'nvidia/nemotron-3.5-lightning:free',
-    'nvidia/nemotron-3-super-120b-a12b:free',
-    'nvidia/nemotron-3-ultra-550b-a55b:free',
-    'google/gemma-4-31b-it:free',
     'openrouter/free',
+    'inclusionai/ling-3.0-flash-sante:free',
+    'nvidia/nemotron-3-super-120b-a12b:free',
   ];
   const startTime = Date.now();
 

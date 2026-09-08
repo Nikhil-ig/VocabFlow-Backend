@@ -147,13 +147,23 @@ Return a strictly formatted JSON object with the following fields:
 
 Return ONLY the raw JSON object, without markdown blocks.`;
 
-    console.log(`[AI Controller] 🌐 Enriching word "${word}" using OpenRouter free model: openrouter/free (100% Free)...`);
-    const response = await openrouter.chat.completions.create({
-      model: "openrouter/free",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.2,
-      max_tokens: 600,
-    });
+    console.log(`[AI Controller] 🌐 Enriching word "${word}" using OpenRouter free model: inclusionai/ling-3.0-flash-fin:free (100% Free)...`);
+    let response: any = null;
+    try {
+      response = await openrouter.chat.completions.create({
+        model: "inclusionai/ling-3.0-flash-fin:free",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.2,
+        max_tokens: 450,
+      });
+    } catch {
+      response = await openrouter.chat.completions.create({
+        model: "openrouter/free",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.2,
+        max_tokens: 450,
+      });
+    }
 
     const aiContent = response.choices[0]?.message?.content;
     if (!aiContent) {
@@ -270,13 +280,23 @@ Return a strictly formatted JSON object with the following fields:
 
 Return ONLY the raw JSON object, without markdown blocks.`;
 
-    console.log('[AI Controller] 🌐 Generating Word of the Day using OpenRouter free model: openrouter/free (100% Free)...');
-    const response = await openrouter.chat.completions.create({
-      model: "openrouter/free",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.8,
-      max_tokens: 500,
-    });
+    console.log('[AI Controller] 🌐 Generating Word of the Day using OpenRouter free model: inclusionai/ling-3.0-flash-fin:free (100% Free)...');
+    let response: any = null;
+    try {
+      response = await openrouter.chat.completions.create({
+        model: "inclusionai/ling-3.0-flash-fin:free",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.7,
+        max_tokens: 400,
+      });
+    } catch {
+      response = await openrouter.chat.completions.create({
+        model: "openrouter/free",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.7,
+        max_tokens: 400,
+      });
+    }
 
     const aiContent = response.choices[0]?.message?.content;
     if (!aiContent) {
