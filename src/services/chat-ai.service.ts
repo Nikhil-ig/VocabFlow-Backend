@@ -53,7 +53,6 @@ export const enhanceWithAI = async (
   userVocab: string[] = [],
   gardenWords: GardenWordInfo[] = []
 ): Promise<ChatEnhanceResult> => {
-  const openaiKey = (process.env.OPENAI_API_KEY || '').replace(/^["']|["']$/g, '').trim();
   const openrouterKey = (process.env.OPENROUTER_API_KEY || '').replace(/^["']|["']$/g, '').trim();
 
   const userVocabContext =
@@ -64,8 +63,8 @@ export const enhanceWithAI = async (
   const gardenVocabContext =
     gardenWords && gardenWords.length > 0
       ? `\n\nUSER'S LIVING VOCABULARY GARDEN FLORA: [${gardenWords
-          .map((g) => `${g.word} (Stage ${g.growthStage || 1} ${g.plantType || 'Flora'})`)
-          .join(', ')}].
+        .map((g) => `${g.word} (Stage ${g.growthStage || 1} ${g.plantType || 'Flora'})`)
+        .join(', ')}].
 GARDEN MEMORY & CONVERSATION MISSION:
 The user is actively nurturing these words as living plants in their Vocabulary Garden! Help them remember and use them:
 1. If the user used any of these garden words in their message, cheer them on enthusiastically (*"🌱 Bestie, you just used your garden plant [word] in conversation!"*)!
@@ -155,48 +154,25 @@ CRITICAL: Respond ONLY with valid JSON in this exact structure without markdown 
     content: message,
   });
 
-  // Strategy 1: Direct OpenAI (GPT-4o Mini) — ultra-fast (<1s latency), reliable, intelligent
-  if (openaiKey) {
-    try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${openaiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: conversationPayload,
-          temperature: 0.85,
-          max_tokens: 800,
-          response_format: { type: 'json_object' },
-        }),
-        signal: AbortSignal.timeout(12000),
-      });
+  console.log(`\n[Chat AI] 💬 Received message: "${message.substring(0, 80)}${message.length > 80 ? '...' : ''}"`);
 
-      if (response.ok) {
-        const jsonResult = await response.json();
-        const rawContent = jsonResult.choices?.[0]?.message?.content || '';
-        const parsed = parseAIResponse(rawContent, message, userVocab, gardenWords, 'ai-openai');
-        if (parsed) return parsed;
-      } else {
-        const err = await response.text();
-        console.warn('OpenAI request returned status', response.status, err);
-      }
-    } catch (err: any) {
-      console.warn('OpenAI direct call failed or timed out:', err.message);
-    }
-  }
-
-  // Strategy 2: OpenRouter (Multi-model fallback: gpt-4o-mini, gemini-2.0-flash, llama-3.3-70b)
+  // Exclusively 100% Free AI Models via OpenRouter
   if (openrouterKey) {
-    const openRouterModels = [
-      'openai/gpt-4o-mini',
-      'google/gemini-2.0-flash-exp:free',
-      'meta-llama/llama-3.3-70b-instruct',
+    const freeModels = [
+      'openrouter/free',
+      'nvidia/nemotron-3.5-lightning:free',
+      'nvidia/nemotron-3-super-120b-a12b:free',
+      'nvidia/nemotron-3-ultra-550b-a55b:free',
+      'google/gemma-4-31b-it:free',
     ];
 
-    for (const model of openRouterModels) {
+    for (const model of freeModels) {
+      // Safety guarantee: Only allow 100% free models
+      if (!model.endsWith(':free') && model !== 'openrouter/free') {
+        continue;
+      }
+      const t0 = Date.now();
+      console.log(`[Chat AI] 🌐 Calling OpenRouter free model: ${model} (100% Free)...`);
       try {
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
@@ -212,22 +188,31 @@ CRITICAL: Respond ONLY with valid JSON in this exact structure without markdown 
             temperature: 0.85,
             max_tokens: 800,
           }),
-          signal: AbortSignal.timeout(12000),
+          signal: AbortSignal.timeout(28000),
         });
 
-        if (!response.ok) continue;
+        if (!response.ok) {
+          const errText = await response.text();
+          console.warn(`[Chat AI] ⚠️ OpenRouter free model ${model} status ${response.status}: ${errText.substring(0, 120)}`);
+          continue;
+        }
 
         const jsonResult = await response.json();
         const rawContent = jsonResult.choices?.[0]?.message?.content || '';
         const parsed = parseAIResponse(rawContent, message, userVocab, gardenWords, 'ai-openrouter');
-        if (parsed) return parsed;
+        if (parsed) {
+          const swaps = parsed.replacements.map((r) => `${r.original} → ${r.replacement}`).join(', ');
+          console.log(`[Chat AI] ✅ OpenRouter free model (${model}) succeeded in ${Date.now() - t0}ms | Swaps: [${swaps || 'none'}]`);
+          return parsed;
+        }
       } catch (err: any) {
-        console.warn(`OpenRouter model ${model} failed:`, err.message);
+        console.warn(`[Chat AI] ⚠️ OpenRouter model ${model} failed (${err.message})`);
       }
     }
   }
 
   // Emergency safety fallback if network is completely down
+  console.log(`[Chat AI] ℹ️ Using emergency local rule-based fallback`);
   return generateEmergencyFallback(message, gardenWords);
 };
 

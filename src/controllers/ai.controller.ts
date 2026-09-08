@@ -2,9 +2,35 @@ import { Response } from 'express';
 import { prisma } from '../server';
 import OpenAI from 'openai';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+const openrouterKey = (process.env.OPENROUTER_API_KEY || '').replace(/^["']|["']$/g, '').trim();
+
+// 100% Free OpenRouter AI Integration
+const openrouter = new OpenAI({
+  baseURL: 'https://openrouter.ai/api/v1',
+  apiKey: openrouterKey,
+  defaultHeaders: {
+    'HTTP-Referer': 'https://vocabverse.app',
+    'X-Title': 'VocabVerse AI',
+  },
 });
+
+function parseCleanJson(content: string): any {
+  if (!content) return null;
+  const cleaned = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    if (match) {
+      try {
+        return JSON.parse(match[0]);
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
+}
 
 export const getRecommendations = async (req: any, res: Response): Promise<void> => {
   try {
@@ -98,8 +124,8 @@ export const enrichWord = async (req: any, res: Response): Promise<void> => {
       return;
     }
 
-    if (!process.env.OPENAI_API_KEY) {
-      res.status(500).json({ success: false, error: 'OpenAI API key not configured on server' });
+    if (!openrouterKey) {
+      res.status(500).json({ success: false, error: 'OpenRouter API key not configured on server' });
       return;
     }
 
@@ -121,19 +147,23 @@ Return a strictly formatted JSON object with the following fields:
 
 Return ONLY the raw JSON object, without markdown blocks.`;
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+    console.log(`[AI Controller] 🌐 Enriching word "${word}" using OpenRouter free model: openrouter/free (100% Free)...`);
+    const response = await openrouter.chat.completions.create({
+      model: "openrouter/free",
       messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" },
       temperature: 0.2,
+      max_tokens: 600,
     });
 
-    const aiContent = response.choices[0].message.content;
+    const aiContent = response.choices[0]?.message?.content;
     if (!aiContent) {
       throw new Error('Failed to generate metadata');
     }
 
-    const enrichedData = JSON.parse(aiContent);
+    const enrichedData = parseCleanJson(aiContent);
+    if (!enrichedData) {
+      throw new Error('Failed to parse enriched word JSON');
+    }
     res.json({ success: true, data: enrichedData });
   } catch (error: any) {
     console.error('Enrich Word Error:', error);
@@ -193,8 +223,8 @@ export const getWordOfTheDay = async (req: any, res: Response): Promise<void> =>
       return;
     }
 
-    if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY.includes('sk-proj-...')) {
-      console.log('Using fallback Word of the Day since OpenAI API key is not valid');
+    if (!openrouterKey) {
+      console.log('Using fallback Word of the Day since OPENROUTER_API_KEY is not configured');
       const fallbackData = {
         word: "Mellifluous",
         meaning: "(of a voice or words) sweet or musical; pleasant to hear.",
@@ -240,19 +270,23 @@ Return a strictly formatted JSON object with the following fields:
 
 Return ONLY the raw JSON object, without markdown blocks.`;
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+    console.log('[AI Controller] 🌐 Generating Word of the Day using OpenRouter free model: openrouter/free (100% Free)...');
+    const response = await openrouter.chat.completions.create({
+      model: "openrouter/free",
       messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" },
       temperature: 0.8,
+      max_tokens: 500,
     });
 
-    const aiContent = response.choices[0].message.content;
+    const aiContent = response.choices[0]?.message?.content;
     if (!aiContent) {
       throw new Error('Failed to generate word of the day');
     }
 
-    const generatedData = JSON.parse(aiContent);
+    const generatedData = parseCleanJson(aiContent);
+    if (!generatedData || !generatedData.word) {
+      throw new Error('Failed to parse Word of the Day JSON');
+    }
 
     wordOfTheDay = await prisma.wordOfTheDay.create({
       data: {

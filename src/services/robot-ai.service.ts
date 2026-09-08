@@ -59,7 +59,7 @@ const challengeCache = new Map<string, RoboticChallenge>();
  */
 export const callOpenRouterWithReasoning = async (
   messages: OpenRouterMessage[],
-  preferredModel: string = 'minimax/minimax-m3:free',
+  preferredModel: string = 'openrouter/free',
   timeoutMs: number = 6500
 ): Promise<{
   content: string;
@@ -79,12 +79,25 @@ export const callOpenRouterWithReasoning = async (
     return null;
   }
 
-  const models = [preferredModel, 'openai/gpt-4o-mini', 'meta-llama/llama-3.3-70b-instruct'];
+  // Strictly free OpenRouter models only (zero billing / zero token cost)
+  const models = [
+    preferredModel,
+    'nvidia/nemotron-3.5-lightning:free',
+    'nvidia/nemotron-3-super-120b-a12b:free',
+    'nvidia/nemotron-3-ultra-550b-a55b:free',
+    'google/gemma-4-31b-it:free',
+    'openrouter/free',
+  ];
   const startTime = Date.now();
 
   for (const model of models) {
+    // Safety guarantee: Ensure no paid model is ever called on OpenRouter
+    if (!model.endsWith(':free') && model !== 'openrouter/free') {
+      continue;
+    }
     if (Date.now() - startTime >= timeoutMs) break;
-    const remainingTime = Math.max(500, timeoutMs - (Date.now() - startTime));
+    const modelStart = Date.now();
+    console.log(`[Robot AI] 🤖 Calling OpenRouter model: ${model} (100% Free)...`);
     try {
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
@@ -105,13 +118,14 @@ export const callOpenRouterWithReasoning = async (
 
       if (!response.ok) {
         const errText = await response.text();
-        console.warn(`Model ${model} returned status ${response.status}:`, errText);
+        console.warn(`[Robot AI] ⚠️ Model ${model} returned status ${response.status}:`, errText.substring(0, 120));
         continue;
       }
 
       const result = await response.json();
       const choice = result.choices?.[0];
       if (choice?.message) {
+        console.log(`[Robot AI] ✅ OpenRouter model ${model} succeeded in ${Date.now() - modelStart}ms`);
         const reasoningText =
           choice.message.reasoning ||
           (Array.isArray(choice.message.reasoning_details)
@@ -131,7 +145,7 @@ export const callOpenRouterWithReasoning = async (
         };
       }
     } catch (err: any) {
-      console.warn(`Call to OpenRouter model ${model} aborted or failed (${err.name}):`, err.message);
+      console.warn(`[Robot AI] ⚠️ Call to OpenRouter model ${model} failed (${err.name}):`, err.message);
     }
   }
 
@@ -1200,7 +1214,7 @@ Return ONLY raw JSON.`;
     },
   ];
 
-  const result = await callOpenRouterWithReasoning(messages, 'minimax/minimax-m3:free', 1800);
+  const result = await callOpenRouterWithReasoning(messages, 'openrouter/free', 2500);
 
   if (result) {
     const parsed = parseCleanJSON(result.content);
@@ -1354,7 +1368,7 @@ Return ONLY raw JSON.`;
     },
   ];
 
-  const result = await callOpenRouterWithReasoning(messages, 'minimax/minimax-m3:free', 6500);
+  const result = await callOpenRouterWithReasoning(messages, 'openrouter/free', 6500);
 
   if (result) {
     const parsed = parseCleanJSON(result.content);
