@@ -192,14 +192,37 @@ export const plantWord = async (req: AuthRequest, res: Response): Promise<void> 
     }
 
 
-    const { cardId, slotIndex, plantType } = req.body;
-    if (!cardId) {
-      res.status(400).json({ success: false, error: 'cardId is required' });
+    const { cardId, slotIndex, plantType, word, meaning, example, rarity } = req.body;
+    let targetCardId = cardId;
+
+    if (!targetCardId && word) {
+      const cleanWord = String(word).trim();
+      let card = await prisma.vocabularyCard.findFirst({
+        where: { userId, word: { equals: cleanWord } },
+      });
+      if (!card) {
+        card = await prisma.vocabularyCard.create({
+          data: {
+            userId,
+            word: cleanWord,
+            meaning: meaning?.trim() || 'Word planted in Vocabulary Garden',
+            example: example?.trim() || 'Cultivated with love in conversation.',
+            status: 'LEARNING',
+            rarity: rarity || 'RARE',
+            worldSlug: 'everyday-realm',
+          },
+        });
+      }
+      targetCardId = card.id;
+    }
+
+    if (!targetCardId) {
+      res.status(400).json({ success: false, error: 'cardId or word is required' });
       return;
     }
 
     const card = await prisma.vocabularyCard.findUnique({
-      where: { id: cardId },
+      where: { id: targetCardId },
     });
 
     if (!card) {
@@ -209,7 +232,7 @@ export const plantWord = async (req: AuthRequest, res: Response): Promise<void> 
 
     // Check if this card is already planted for this user
     const existingPlotForCard = await prisma.gardenPlot.findFirst({
-      where: { userId, cardId },
+      where: { userId, cardId: targetCardId },
       include: { card: true },
     });
 
@@ -278,7 +301,7 @@ export const plantWord = async (req: AuthRequest, res: Response): Promise<void> 
     const plot = await prisma.gardenPlot.create({
       data: {
         userId,
-        cardId,
+        cardId: targetCardId,
         slotIndex: targetSlot,
         plantType: chosenPlantType,
         growthStage: 1, // Seedling
@@ -648,6 +671,70 @@ export const waterPlant = async (req: AuthRequest, res: Response): Promise<void>
     });
   } catch (error: any) {
     console.error('waterPlant error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * Water all living flora in the user's sanctuary at once
+ */
+export const waterAllPlants = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = await resolveUserId(req);
+    if (!userId) {
+      res.status(401).json({ success: false, error: 'Unauthorized' });
+      return;
+    }
+
+    const plots = await prisma.gardenPlot.findMany({
+      where: { userId },
+      include: { card: true },
+    });
+
+    if (plots.length === 0) {
+      res.json({ success: false, error: 'No plants in garden to water.' });
+      return;
+    }
+
+    let blossomedCount = 0;
+    const now = new Date();
+
+    for (const plot of plots) {
+      let nextStage = plot.growthStage;
+      if (plot.growthStage < 4 && Math.random() > 0.4) {
+        nextStage = Math.min(4, plot.growthStage + 1);
+        blossomedCount++;
+      }
+      await prisma.gardenPlot.update({
+        where: { id: plot.id },
+        data: {
+          health: 100,
+          growthStage: nextStage,
+          wateredAt: now,
+        },
+      });
+    }
+
+    const xpResult = await awardXP(
+      userId,
+      15,
+      'GARDEN_WATER',
+      `Watered ${plots.length} living flora in sanctuary`
+    );
+
+    await updateDailyStreak(userId);
+
+    res.json({
+      success: true,
+      data: {
+        wateredCount: plots.length,
+        blossomedCount,
+        gamification: xpResult,
+      },
+      message: `💧 Watered ${plots.length} plants! +15 XP`,
+    });
+  } catch (error: any) {
+    console.error('waterAllPlants error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 };

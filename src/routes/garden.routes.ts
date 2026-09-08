@@ -4,6 +4,7 @@ import {
   getNourishChallenge,
   plantWord,
   waterPlant,
+  waterAllPlants,
   removePlant,
   harvestPlant,
   getHarvestedWords,
@@ -18,6 +19,7 @@ router.get('/harvested', optionalAuth, getHarvestedWords);
 router.get('/nourish-challenge/:slotIndex', optionalAuth, getNourishChallenge);
 router.post('/evaluate-sentence', optionalAuth, evaluateSentence);
 router.post('/plant', optionalAuth, plantWord);
+router.post('/water-all', optionalAuth, waterAllPlants);
 router.post('/water/:slotIndex', optionalAuth, waterPlant);
 router.delete('/plot/:slotIndex', optionalAuth, removePlant);
 router.delete('/:slotIndex', optionalAuth, removePlant);

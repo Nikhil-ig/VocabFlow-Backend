@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../server';
 import { generateToken } from '../middleware/auth';
+import { updateDailyStreak } from '../services/gamification.service';
 import { z } from 'zod';
 
 const registerSchema = z.object({
@@ -167,4 +168,107 @@ export const logout = async (req: Request, res: Response): Promise<void> => {
     sameSite: isProd ? 'none' : 'lax',
   });
   res.status(200).json({ success: true, message: 'Logged out successfully' });
+};
+
+/**
+ * Telegram Bot Authentication Endpoint
+ * Auto-registers or authenticates Telegram users and returns a JWT token.
+ */
+export const telegramAuth = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { telegramId, firstName, lastName, username, languageCode } = req.body;
+    if (!telegramId) {
+      res.status(400).json({ success: false, error: 'telegramId is required' });
+      return;
+    }
+
+    const email = `tg_${telegramId}@vocabverse.app`;
+    let user = await prisma.user.findFirst({
+      where: { email },
+      include: { profile: true, streak: true, statistics: true },
+    });
+
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    if (!user) {
+      const fullName = [firstName, lastName].filter(Boolean).join(' ');
+      const displayName = username ? `@${username}` : fullName || 'Cosmic Learner';
+
+      user = await prisma.user.create({
+        data: {
+          email,
+          name: fullName || 'Telegram Explorer',
+          displayName,
+          avatar: 'explorer',
+          role: 'USER',
+          xp: 50,
+          level: 1,
+          onboardingComplete: true,
+          profile: {
+            create: {
+              englishLevel: 'INTERMEDIATE',
+              nativeLanguage: languageCode || 'en',
+              dailyGoalMinutes: 15,
+              targetWordsPerDay: 5,
+              preferredWorld: 'everyday-realm',
+            },
+          },
+          streak: {
+            create: {
+              currentStreak: 1,
+              longestStreak: 1,
+              lastActiveDate: todayStr,
+            },
+          },
+          statistics: {
+            create: {
+              totalCards: 0,
+              masteredCards: 0,
+              learningCards: 0,
+              toLearnCards: 0,
+              masteryPercentage: 0,
+              totalReviewsToday: 0,
+              streakDays: 1,
+            },
+          },
+        },
+        include: {
+          profile: true,
+          streak: true,
+          statistics: true,
+        },
+      });
+      console.log(`[Auth API] 🌟 Registered new Telegram user: ${user.name} (${user.id})`);
+    } else {
+      if (user.streak && user.streak.lastActiveDate !== todayStr) {
+        await updateDailyStreak(user.id);
+      }
+    }
+
+    const token = generateToken({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      organizationId: user.organizationId,
+      subscriptionTier: user.subscriptionTier,
+    });
+
+    res.json({
+      success: true,
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        displayName: user.displayName,
+        email: user.email,
+        role: user.role,
+        xp: user.xp,
+        level: user.level,
+      },
+    });
+  } catch (error: any) {
+    console.error('Telegram Auth Error:', error);
+    res.status(500).json({ success: false, error: error.message || 'Internal server error' });
+  }
 };
